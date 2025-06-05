@@ -1,0 +1,2 @@
+harkirat|2:2,|30000|house no. 312, sector 32, chandigarh
+Kirat|2:2,|32000|house no. 123, sector 32, chandigarh
