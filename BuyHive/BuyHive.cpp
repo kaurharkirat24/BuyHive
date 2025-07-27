@@ -2,148 +2,148 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <map>
 #include <limits>
-#include <sstream>
 using namespace std;
 
-#define MAX_PRODUCTS 100
-#define MAX_CART_SIZE 100
+#define MAX_PRODUCTS 10
+#define MAX_CART_SIZE 10
 
-// --- Product Classes ---
+// ------------------ Product Classes ------------------
 
 class Product {
 protected:
     int id;
     string name;
     double price;
+
 public:
     Product() : id(0), name(""), price(0.0) {}
-    Product(int pid, string pname, double pprice) : id(pid), name(pname), price(pprice) {}
+
+    Product(int pid, string pname, double pprice)
+        : id(pid), name(pname), price(pprice) {}
+
     virtual void display() {
         cout << "ID: " << id << " | Name: " << name << " | Price: Rs." << price << endl;
     }
+
     int getId() { return id; }
     string getName() { return name; }
     double getPrice() { return price; }
-    void setName(const string& n) { name = n; }
-    void setPrice(double p) { price = p; }
-    virtual int getType() const { return 0; } // 1=Electronics, 2=Clothing
 };
 
 class Electronics : public Product {
 public:
     Electronics(int pid, string pname, double pprice) : Product(pid, pname, pprice) {}
+
     void display() override {
         cout << "[Electronics] ";
         Product::display();
     }
-    int getType() const override { return 1; }
 };
 
 class Clothing : public Product {
 public:
     Clothing(int pid, string pname, double pprice) : Product(pid, pname, pprice) {}
+
     void display() override {
         cout << "[Clothing]    ";
         Product::display();
     }
-    int getType() const override { return 2; }
 };
 
-// --- Product File I/O ---
-
-vector<Product*> loadProducts(const string& filename) {
-    vector<Product*> products;
-    ifstream file(filename);
-    string line;
-    while (getline(file, line)) {
-        stringstream ss(line);
-        int id, type;
-        string name;
-        double price;
-        ss >> id >> type;
-        ss.ignore();
-        getline(ss, name, '|');
-        ss >> price;
-        if (type == 1)
-            products.push_back(new Electronics(id, name, price));
-        else if (type == 2)
-            products.push_back(new Clothing(id, name, price));
-    }
-    return products;
-}
-
-void saveProducts(const string& filename, const vector<Product*>& products) {
-    ofstream file(filename);
-    for (auto* p : products) {
-        file << p->getId() << " " << p->getType() << " " << p->getName() << "|" << p->getPrice() << endl;
-    }
-}
-
-// --- Cart with Quantities ---
+// ------------------ Cart Class ------------------
 
 class Cart {
 private:
-    map<int, int> items; // productId -> quantity
+    Product* items[MAX_CART_SIZE];
+    int itemCount;
+
 public:
-    void addProduct(int pid, int qty) {
-        items[pid] += qty;
-        cout << "Added quantity " << qty << " of product ID " << pid << " to cart.\n";
-    }
-    void removeProduct(int pid) {
-        if (items.count(pid)) {
-            items.erase(pid);
-            cout << "Product ID " << pid << " removed from cart.\n";
+    Cart() : itemCount(0) {}
+
+    void addProduct(Product* p) {
+        if (itemCount < MAX_CART_SIZE) {
+            items[itemCount++] = p;
+            cout << p->getName() << " added to cart.\n";
+            cout << "Total Bill: Rs." << getTotalBill() << endl;
         } else {
-            cout << "Product not found in cart!\n";
+            cout << "Cart is full!\n";
         }
     }
-    double getTotalBill(const vector<Product*>& products) {
-        double total = 0;
-        for (auto& [pid, qty] : items) {
-            for (auto* p : products) {
-                if (p->getId() == pid) total += p->getPrice() * qty;
+
+    void removeProduct(int pid) {
+        for (int i = 0; i < itemCount; i++) {
+            if (items[i]->getId() == pid) {
+                cout << items[i]->getName() << " removed from cart.\n";
+                for (int j = i; j < itemCount - 1; j++) {
+                    items[j] = items[j + 1];
+                }
+                itemCount--;
+                return;
             }
+        }
+        cout << "Product not found in cart!\n";
+    }
+
+    double getTotalBill() {
+        double total = 0;
+        for (int i = 0; i < itemCount; i++) {
+            total += items[i]->getPrice();
         }
         return total;
     }
-    void display(const vector<Product*>& products) {
-        cout << "\n--- Cart Items ---\n";
-        if (items.empty()) {
-            cout << "Cart is empty!\n";
-            return;
-        }
-        for (auto& [pid, qty] : items) {
-            for (auto* p : products) {
-                if (p->getId() == pid) {
-                    p->display();
-                    cout << "Quantity: " << qty << endl;
-                }
-            }
-        }
-        cout << "Total Bill: Rs." << getTotalBill(products) << endl;
+
+    bool isEmpty() {
+        return itemCount == 0;
     }
-    bool isEmpty() { return items.empty(); }
-    map<int, int>& getItems() { return items; }
-    void clear() { items.clear(); }
+
+    friend void displayCart(Cart& c);
+    friend class User;
 };
 
-// --- User and Admin ---
+void displayCart(Cart& c) {
+    cout << "\n--- Cart Items ---\n";
+    if (c.itemCount == 0) {
+        cout << "Cart is empty!\n";
+        return;
+    }
+    for (int i = 0; i < c.itemCount; i++) {
+        c.items[i]->display();
+    }
+    cout << "Total Bill: Rs." << c.getTotalBill() << endl;
+}
+
+// ------------------ User Class ------------------
 
 class User {
-protected:
+private:
     string username, password;
+
 public:
     User(string uname, string pass) : username(uname), password(pass) {}
-    virtual bool isAdmin() { return false; }
+
     string getUsername() { return username; }
+
+    bool isDuplicateUsername() {
+        ifstream file("users.txt");
+        string uname, pass;
+        while (file >> uname >> pass) {
+            if (uname == username) return true;
+        }
+        return false;
+    }
+
     void registerUser() {
+        if (isDuplicateUsername()) {
+            cout << "Username already exists! Try a different one.\n";
+            return;
+        }
         ofstream file("users.txt", ios::app);
         file << username << " " << password << "\n";
         file.close();
         cout << "Registration successful!\n";
     }
+
     bool loginUser() {
         ifstream file("users.txt");
         string uname, pass;
@@ -153,206 +153,236 @@ public:
                 return true;
             }
         }
-        file.close();
         cout << "Invalid credentials!\n";
         return false;
     }
-};
 
-class Admin : public User {
-public:
-    Admin(string uname, string pass) : User(uname, pass) {}
-    bool isAdmin() override { return true; }
-};
-
-// --- Order History ---
-
-void saveOrder(const string& username, Cart& cart, const vector<Product*>& products, const string& address) {
-    ofstream file("orders.txt", ios::app);
-    file << username << "|";
-    for (auto& [pid, qty] : cart.getItems()) {
-        file << pid << ":" << qty << ",";
+    void saveOrderToFile(Cart& cart, const string& address) {
+        ofstream file("orders.txt", ios::app);
+        file << "User: " << username << "\n";
+        file << "Shipping Address: " << address << "\n";
+        file << "Items:\n";
+        for (int i = 0; i < cart.itemCount; i++) {
+            file << "- " << cart.items[i]->getName() << " Rs." << cart.items[i]->getPrice() << "\n";
+        }
+        file << "Total: Rs." << cart.getTotalBill() << "\n";
+        file << "-----------------------------------\n";
+        file.close();
     }
-    file << "|" << cart.getTotalBill(products) << "|" << address << endl;
-}
 
-void viewOrderHistory(const string& username, const vector<Product*>& products) {
-    ifstream file("orders.txt");
-    string line;
-    cout << "\n--- Order History for " << username << " ---\n";
-    bool found = false;
-    while (getline(file, line)) {
-        stringstream ss(line);
-        string user, items, total, address;
-        getline(ss, user, '|');
-        getline(ss, items, '|');
-        getline(ss, total, '|');
-        getline(ss, address);
-        if (user == username) {
-            found = true;
-            cout << "Items: ";
-            stringstream itemss(items);
-            string item;
-            while (getline(itemss, item, ',')) {
-                if (item.empty()) continue;
-                int pid, qty;
-                sscanf(item.c_str(), "%d:%d", &pid, &qty);
-                for (auto* p : products) {
-                    if (p->getId() == pid) {
-                        cout << p->getName() << " x" << qty << "; ";
-                    }
-                }
+    void saveAddress(const string& address) {
+        ofstream file("addresses.txt", ios::app);
+        file << username << ":" << address << "\n";
+        file.close();
+    }
+
+    vector<string> getSavedAddresses() {
+        vector<string> addresses;
+        ifstream file("addresses.txt");
+        string line;
+        while (getline(file, line)) {
+            size_t delim = line.find(':');
+            if (line.substr(0, delim) == username) {
+                addresses.push_back(line.substr(delim + 1));
             }
-            cout << "\nTotal: Rs." << total << "\nAddress: " << address << "\n---\n";
         }
+        return addresses;
     }
-    if (!found) cout << "No orders found.\n";
-}
 
-// --- Input Validation ---
+    void viewOrderHistory() {
+        ifstream file("orders.txt");
+        string line;
+        bool found = false;
+        while (getline(file, line)) {
+            if (line.find("User: " + username) != string::npos) {
+                found = true;
+                cout << "\n" << line << "\n";
+                while (getline(file, line) && line != "-----------------------------------") {
+                    cout << line << "\n";
+                }
+                cout << "-----------------------------------\n";
+            }
+        }
+        if (!found) cout << "No order history found for user.\n";
+    }
+};
 
-int getIntInput(const string& prompt, int min, int max) {
-    int val;
+// ------------------ Input Validation ------------------
+
+void getValidatedIntInput(const string& prompt, int& input) {
     while (true) {
         cout << prompt;
-        cin >> val;
-        if (cin.fail() || val < min || val > max) {
-            cout << "Invalid input. Try again.\n";
+        cin >> input;
+        if (cin.fail()) {
             cin.clear();
             cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << "Invalid input! Please enter an integer.\n";
         } else {
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            return val;
+            break;
         }
     }
 }
 
-double getDoubleInput(const string& prompt, double min) {
-    double val;
-    while (true) {
-        cout << prompt;
-        cin >> val;
-        if (cin.fail() || val < min) {
-            cout << "Invalid input. Try again.\n";
-            cin.clear();
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
-        } else {
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
-            return val;
-        }
-    }
-}
-
-// --- Main ---
+// ------------------ Main ------------------
 
 int main() {
-    vector<Product*> products = loadProducts("products.txt");
+    Product* products[MAX_PRODUCTS] = {
+        new Electronics(1, "Laptop", 80000),
+        new Electronics(2, "Smartphone", 15000),
+        new Electronics(3, "Headphone", 1000),
+        new Electronics(4, "Smartwatch", 2000),
+        new Clothing(5, "T-Shirt", 200),
+        new Clothing(6, "Jeans", 2400),
+        new Clothing(7, "Saree", 4500),
+        new Clothing(8, "Trousers", 900),
+        new Clothing(9, "Shorts", 700),
+        new Clothing(10, "Hoodie", 2000)
+    };
+
     Cart cart;
     User* currentUser = nullptr;
-    bool loggedIn = false, isAdmin = false;
+    int choice;
 
     while (true) {
-        cout << "\n--- BuyHive Main Menu ---\n";
-        cout << "1. Register\n2. Login\n3. Browse Products\n4. Add to Cart\n5. View Cart\n6. Remove from Cart\n7. Place Order\n8. View Order History\n9. Exit\n";
-        if (isAdmin) cout << "10. [Admin] Add Product\n11. [Admin] Edit Product\n12. [Admin] Remove Product\n";
-        int choice = getIntInput("Enter choice: ", 1, isAdmin ? 12 : 9);
+        cout << "\n1. Register\n2. Login\n3. Browse Products\n4. Add to Cart\n5. View Cart\n6. Remove from Cart\n7. Place Order\n8. View Order History\n9. Exit\n";
+        getValidatedIntInput("Enter choice: ", choice);
 
-        if (choice == 1) {
-            string uname, pass;
-            cout << "Enter username: "; getline(cin, uname);
-            cout << "Enter password: "; getline(cin, pass);
-            User u(uname, pass);
-            u.registerUser();
-        } else if (choice == 2) {
-            string uname, pass;
-            cout << "Enter username: "; getline(cin, uname);
-            cout << "Enter password: "; getline(cin, pass);
-            if (uname == "admin" && pass == "admin123") {
-                currentUser = new Admin(uname, pass);
-                loggedIn = true; isAdmin = true;
-                cout << "Admin login successful.\n";
-            } else {
-                User* u = new User(uname, pass);
-                if (u->loginUser()) {
-                    currentUser = u;
-                    loggedIn = true; isAdmin = false;
+        try {
+            if (choice < 1 || choice > 9)
+                throw invalid_argument("Invalid menu choice! Please enter between 1 and 9.");
+
+            if (choice == 1) {
+                string uname, pass;
+                cout << "Enter username: ";
+                cin >> uname;
+                cout << "Enter password: ";
+                cin >> pass;
+                User u(uname, pass);
+                u.registerUser();
+            }
+
+            else if (choice == 2) {
+                string uname, pass;
+                cout << "Enter username: ";
+                cin >> uname;
+                cout << "Enter password: ";
+                cin >> pass;
+                User* temp = new User(uname, pass);
+                if (temp->loginUser()) {
+                    currentUser = temp;
                 } else {
-                    delete u;
+                    delete temp;
+                    continue;
                 }
             }
-        } else if (choice == 3) {
-            cout << "\n--- Available Products ---\n";
-            for (auto* p : products) p->display();
-        } else if (choice == 4) {
-            if (!loggedIn) { cout << "Please login first.\n"; continue; }
-            int pid = getIntInput("Enter Product ID to add to cart: ", 1, 10000);
-            int qty = getIntInput("Enter quantity: ", 1, 100);
-            bool found = false;
-            for (auto* p : products) {
-                if (p->getId() == pid) { found = true; break; }
-            }
-            if (!found) cout << "Invalid Product ID!\n";
-            else cart.addProduct(pid, qty);
-        } else if (choice == 5) {
-            cart.display(products);
-        } else if (choice == 6) {
-            int pid = getIntInput("Enter Product ID to remove from cart: ", 1, 10000);
-            cart.removeProduct(pid);
-        } else if (choice == 7) {
-            if (!loggedIn) { cout << "Please login first.\n"; continue; }
-            cart.display(products);
-            if (cart.isEmpty()) {
-                cout << "Cart is empty. Cannot place an order!\n";
-            } else {
-                string address;
-                cout << "Enter your shipping address: ";
-                getline(cin, address);
-                saveOrder(currentUser->getUsername(), cart, products, address);
-                cout << "Order placed successfully!\n";
-                cart.clear();
-            }
-        } else if (choice == 8) {
-            if (!loggedIn) { cout << "Please login first.\n"; continue; }
-            viewOrderHistory(currentUser->getUsername(), products);
-        } else if (choice == 9) {
-            cout << "Exiting program...\n";
-            break;
-        } else if (isAdmin && choice == 10) {
-            int id = getIntInput("Enter new product ID: ", 1, 10000);
-            cout << "Enter name: "; string name; getline(cin, name);
-            double price = getDoubleInput("Enter price: Rs.", 1);
-            int type = getIntInput("Enter type (1=Electronics, 2=Clothing): ", 1, 2);
-            Product* p = (type == 1) ? (Product*)new Electronics(id, name, price) : (Product*)new Clothing(id, name, price);
-            products.push_back(p);
-            saveProducts("products.txt", products);
-            cout << "Product added.\n";
-        } else if (isAdmin && choice == 11) {
-            int id = getIntInput("Enter product ID to edit: ", 1, 10000);
-            for (auto* p : products) {
-                if (p->getId() == id) {
-                    cout << "Editing "; p->display();
-                    cout << "Enter new name: "; string name; getline(cin, name);
-                    double price = getDoubleInput("Enter new price: Rs.", 1);
-                    p->setName(name); p->setPrice(price);
-                    saveProducts("products.txt", products);
-                    cout << "Product updated.\n";
-                    break;
+
+            else if (choice == 3) {
+                cout << "\n--- Available Products ---\n";
+                for (int i = 0; i < MAX_PRODUCTS; i++) {
+                    products[i]->display();
                 }
             }
-        } else if (isAdmin && choice == 12) {
-            int id = getIntInput("Enter product ID to remove: ", 1, 10000);
-            for (auto it = products.begin(); it != products.end(); ++it) {
-                if ((*it)->getId() == id) {
-                    delete *it;
-                    products.erase(it);
-                    saveProducts("products.txt", products);
-                    cout << "Product removed.\n";
-                    break;
+
+            else if (choice == 4) {
+                if (!currentUser) {
+                    cout << "Please login first to add products to cart.\n";
+                    continue;
+                }
+                int pid;
+                getValidatedIntInput("Enter Product ID to add to cart: ", pid);
+                bool found = false;
+                for (int i = 0; i < MAX_PRODUCTS; i++) {
+                    if (products[i]->getId() == pid) {
+                        cart.addProduct(products[i]);
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) cout << "Invalid Product ID!\n";
+            }
+
+            else if (choice == 5) {
+                displayCart(cart);
+            }
+
+            else if (choice == 6) {
+                if (!currentUser) {
+                    cout << "Please login first to remove products from cart.\n";
+                    continue;
+                }
+                int pid;
+                getValidatedIntInput("Enter Product ID to remove from cart: ", pid);
+                cart.removeProduct(pid);
+            }
+
+            else if (choice == 7) {
+                if (!currentUser) {
+                    cout << "Please login to place order.\n";
+                    continue;
+                }
+                displayCart(cart);
+                if (cart.isEmpty()) {
+                    cout << "Cart is empty. Cannot place order!\n";
+                } else {
+                    vector<string> savedAddresses = currentUser->getSavedAddresses();
+                    string selectedAddress;
+                    if (!savedAddresses.empty()) {
+                        cout << "\nSaved Addresses:\n";
+                        for (int i = 0; i < savedAddresses.size(); i++) {
+                            cout << i + 1 << ". " << savedAddresses[i] << endl;
+                        }
+                        cout << savedAddresses.size() + 1 << ". Enter a new address\n";
+                        int addrChoice;
+                        getValidatedIntInput("Choose an address: ", addrChoice);
+                        cin.ignore();
+
+                        if (addrChoice >= 1 && addrChoice <= savedAddresses.size()) {
+                            selectedAddress = savedAddresses[addrChoice - 1];
+                        } else if (addrChoice == savedAddresses.size() + 1) {
+                            cout << "Enter new address: ";
+                            getline(cin, selectedAddress);
+                            currentUser->saveAddress(selectedAddress);
+                        } else {
+                            cout << "Invalid choice!\n";
+                            continue;
+                        }
+                    } else {
+                        cin.ignore();
+                        cout << "Enter shipping address: ";
+                        getline(cin, selectedAddress);
+                        currentUser->saveAddress(selectedAddress);
+                    }
+
+                    cout << "Order placed successfully!\n";
+                    cout << "Shipping to: " << selectedAddress << endl;
+                    cout << "Total Amount Paid: Rs." << cart.getTotalBill() << endl;
+                    currentUser->saveOrderToFile(cart, selectedAddress);
+                    cart = Cart(); // reset cart
                 }
             }
+
+            else if (choice == 8) {
+                if (!currentUser) {
+                    cout << "Please login to view order history.\n";
+                    continue;
+                }
+                currentUser->viewOrderHistory();
+            }
+
+            else if (choice == 9) {
+                cout << "Exiting program...\n";
+                break;
+            }
+
+        } catch (const invalid_argument& e) {
+            cout << "Exception: " << e.what() << endl;
         }
     }
-    for (auto* p : products) delete p;
+
+    for (int i = 0; i < MAX_PRODUCTS; i++) {
+        delete products[i];
+    }
     delete currentUser;
+
     return 0;
 }
